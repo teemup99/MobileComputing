@@ -83,6 +83,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -101,16 +102,26 @@ import coil3.request.crossfade
 import kotlinx.coroutines.flow.asFlow
 import java.io.File
 import java.io.FileOutputStream
+import android.Manifest
+import android.app.NotificationManager
+import android.content.pm.PackageManager
+import android.widget.Toast
 
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
+    private lateinit var phoneOrientationListener: PhoneOrientationListener
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d("MainActivity", "onCreate called!")
         enableEdgeToEdge()
         viewModel = ViewModelProvider(this)[MainViewModel::class.java]
+        phoneOrientationListener = PhoneOrientationListener(this) {
+            runOnUiThread {
+                NotificationHelper(this).sendNotification("Your phone is upside down", "Magic")
+            }
+        }
         setContent {
             Harjoitus1Theme {
                 Box(modifier = Modifier
@@ -121,6 +132,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        phoneOrientationListener.register()
+    }
+    override fun onPause() {
+        super.onPause()
+        phoneOrientationListener.unregister()
     }
 }
 
@@ -134,6 +154,30 @@ object ProfileData
 
 @Serializable
 object Conversation2
+
+@Composable
+fun RequestNotificationPermission() {
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            println("Permission Granted")
+        } else {
+            println("Permission Denied")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) != PackageManager.PERMISSION_GRANTED)
+        {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+}
 
 @Composable
 fun MessageCardScreen(
@@ -228,6 +272,10 @@ fun ProfileDataScreen(
 
     val context = LocalContext.current
 
+    val notificationHelper = NotificationHelper(context)
+
+    notificationHelper.createNotificationChannel()
+
     val profilePicUri = remember(user?.profilePicUri) {
         user?.profilePicUri?.let { Uri.parse(it) }
     }
@@ -266,6 +314,7 @@ fun ProfileDataScreen(
                     onClick = {
                         Log.d("ProfileDataScreen", "Saving user: name=$username, imageUri=$profilePicUri")
                     onSaveUser(username, profilePicUri)
+                        notificationHelper.sendProfNotification("Profile Updated", username)
                     onNavigateBack() },
                     border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface)
                 ) {
@@ -403,6 +452,7 @@ fun ConversationScreen(
 fun MainApp(viewModel: MainViewModel) {
     // Init navController
     val navController = rememberNavController()
+    RequestNotificationPermission()
     //val user by viewModel.userStateFlow.collectAsState()
     NavHost(navController, startDestination = "conversation2") {
         composable("conversation2") {

@@ -27,6 +27,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _userStateFlow = MutableStateFlow<User?>(null)
     val userStateFlow: StateFlow<User?> = _userStateFlow
 
+
+
     init {
         Log.d("MainViewModel", "ViewModel initialized")
         viewModelScope.launch {
